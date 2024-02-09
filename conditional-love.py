@@ -29,19 +29,18 @@ def main(args):
     base_session = get_base_session(args.profile)
 
     if not can_access_target_with_policy(base_session, args.role, args.target, args.action, None, args.region):
-        print(f"Failed to access target. Exiting.")
+        print("Failed to access target. Exiting.")
         exit(1)
 
     print("Starting to be wrong. Please be patient...")
     run_search(base_session, args)
 
 
-
 def run_search(base_session, args):
     confirmed_partial = ""
 
     for _ in range(0, 100):
-        for i, alpha in enumerate(args.alphabet):
+        for _, alpha in enumerate(args.alphabet):
             test_partial = f"{confirmed_partial}{alpha}"
             policy = get_policy(args.action, args.condition, test_partial, args.tag_key)
             if can_access_target_with_policy(base_session, args.role, args.target, args.action, json.dumps(policy), args.region):
@@ -206,4 +205,3 @@ if __name__ == "__main__":
         exit(1)
 
     main(args)
-
