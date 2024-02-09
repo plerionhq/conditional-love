@@ -111,13 +111,12 @@ def can_access_target_with_policy(session, role_arn, target, action, policy=None
 
         return True
     except ClientError as e:
-        if e.response.get("Error", {}).get("Code") == "AccessDeniedException":
-            pass
-        elif e.response.get("Error", {}).get("Code") == "ForbiddenException":
-            pass
-        elif e.response.get("Error", {}).get("Code") == "ForbiddenException, AccessDeniedException":
-            pass
-        elif e.response.get("Error", {}).get("Code") == "403":
+        if e.response.get("Error", {}).get("Code") in [
+            "AccessDeniedException",
+            "ForbiddenException",
+            "ForbiddenException, AccessDeniedException",
+            "403",
+        ]:
             pass
         
     return False
