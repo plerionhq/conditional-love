@@ -78,9 +78,9 @@ def get_base_session(profile):
         return boto3.Session(profile_name=profile)
     else:
         return boto3.Session()
-    
 
-def can_access_target_with_policy(session, role_arn, target, action, policy=None, region=None):
+
+def can_access_target_with_policy(session, role_arn, target, action, policy=None, region=None) -> bool:
     if not policy:
         assumed_role_session = assume_role(session, role_arn)
     else:
@@ -92,23 +92,24 @@ def can_access_target_with_policy(session, role_arn, target, action, policy=None
         if not region:
             client = assumed_role_session.client(service_name)
         else:
-            client = assumed_role_session.client(service_name, region_name=region)
-    
+            client = assumed_role_session.client(
+                service_name, region_name=region)
+    actions = {
+        's3:HeadObject': head_s3_object,
+        'dataexchange:GetDataSet': lambda client, target: client.get_data_set(DataSetId=target),
+        'lambda:InvokeFunctionUrl': invoke_lambda_url,
+        'execute-api:Invoke': invoke_apigateway_url,
+        'sts:AssumeRole': lambda client, target: client.assume_role(RoleArn=target, RoleSessionName='ConditionalLoveSession'),
+        'sqs:ReceiveMessage': lambda client, target: client.receive_message(QueueUrl=target)
+    }
     try:
-        if action=='s3:HeadObject':
-            head_s3_object(client, target)
-        elif action=='dataexchange:GetDataSet':
-            client.get_data_set(DataSetId=target)
-        elif action=='lambda:InvokeFunctionUrl':
-            return invoke_lambda_url(assumed_role_session, target, region)
-        elif action=='execute-api:Invoke':
-            return invoke_apigateway_url(assumed_role_session, target, region)
-        elif action=='sts:AssumeRole':
-            client.assume_role(RoleArn=target, RoleSessionName='ConditionalLoveSession')
-        elif action=='sqs:ReceiveMessage':
-            client.receive_message(QueueUrl=target)
-
-        return True
+        if action in actions:
+            result = actions[action](client, target)
+            if isinstance(result, bool):
+                return result
+            return True
+        else:
+            return False
     except ClientError as e:
         if e.response.get("Error", {}).get("Code") in [
             "AccessDeniedException",
@@ -117,7 +118,6 @@ def can_access_target_with_policy(session, role_arn, target, action, policy=None
             "403",
         ]:
             pass
-        
     return False
 
 
@@ -173,7 +173,7 @@ def invoke_lambda_url(session, target_url, region):
     prepped = request.prepare()
     
     return requests.get(target_url, headers=prepped.headers).ok
-    
+
 
 def invoke_apigateway_url(session, target_url, region):
     # TODO: Support API keys
