@@ -29,19 +29,18 @@ def main(args):
     base_session = get_base_session(args.profile)
 
     if not can_access_target_with_policy(base_session, args.role, args.target, args.action, None, args.region):
-        print(f"Failed to access target. Exiting.")
+        print("Failed to access target. Exiting.")
         exit(1)
 
     print("Starting to be wrong. Please be patient...")
     run_search(base_session, args)
 
 
-
 def run_search(base_session, args):
     confirmed_partial = ""
 
     for _ in range(0, 100):
-        for i, alpha in enumerate(args.alphabet):
+        for _, alpha in enumerate(args.alphabet):
             test_partial = f"{confirmed_partial}{alpha}"
             policy = get_policy(args.action, args.condition, test_partial, args.tag_key)
             if can_access_target_with_policy(base_session, args.role, args.target, args.action, json.dumps(policy), args.region):
@@ -79,9 +78,9 @@ def get_base_session(profile):
         return boto3.Session(profile_name=profile)
     else:
         return boto3.Session()
-    
 
-def can_access_target_with_policy(session, role_arn, target, action, policy=None, region=None):
+
+def can_access_target_with_policy(session, role_arn, target, action, policy=None, region=None) -> bool:
     if not policy:
         assumed_role_session = assume_role(session, role_arn)
     else:
@@ -93,33 +92,32 @@ def can_access_target_with_policy(session, role_arn, target, action, policy=None
         if not region:
             client = assumed_role_session.client(service_name)
         else:
-            client = assumed_role_session.client(service_name, region_name=region)
-    
+            client = assumed_role_session.client(
+                service_name, region_name=region)
+    actions = {
+        's3:HeadObject': head_s3_object,
+        'dataexchange:GetDataSet': lambda client, target: client.get_data_set(DataSetId=target),
+        'lambda:InvokeFunctionUrl': invoke_lambda_url,
+        'execute-api:Invoke': invoke_apigateway_url,
+        'sts:AssumeRole': lambda client, target: client.assume_role(RoleArn=target, RoleSessionName='ConditionalLoveSession'),
+        'sqs:ReceiveMessage': lambda client, target: client.receive_message(QueueUrl=target)
+    }
     try:
-        if action=='s3:HeadObject':
-            head_s3_object(client, target)
-        elif action=='dataexchange:GetDataSet':
-            client.get_data_set(DataSetId=target)
-        elif action=='lambda:InvokeFunctionUrl':
-            return invoke_lambda_url(assumed_role_session, target, region)
-        elif action=='execute-api:Invoke':
-            return invoke_apigateway_url(assumed_role_session, target, region)
-        elif action=='sts:AssumeRole':
-            client.assume_role(RoleArn=target, RoleSessionName='ConditionalLoveSession')
-        elif action=='sqs:ReceiveMessage':
-            client.receive_message(QueueUrl=target)
-
-        return True
+        if action in actions:
+            result = actions[action](client, target)
+            if isinstance(result, bool):
+                return result
+            return True
+        else:
+            return False
     except ClientError as e:
-        if e.response.get("Error", {}).get("Code") == "AccessDeniedException":
+        if e.response.get("Error", {}).get("Code") in [
+            "AccessDeniedException",
+            "ForbiddenException",
+            "ForbiddenException, AccessDeniedException",
+            "403",
+        ]:
             pass
-        elif e.response.get("Error", {}).get("Code") == "ForbiddenException":
-            pass
-        elif e.response.get("Error", {}).get("Code") == "ForbiddenException, AccessDeniedException":
-            pass
-        elif e.response.get("Error", {}).get("Code") == "403":
-            pass
-        
     return False
 
 
@@ -174,12 +172,8 @@ def invoke_lambda_url(session, target_url, region):
     sigv4.add_auth(request)
     prepped = request.prepare()
     
-    response = requests.get(target_url, headers=prepped.headers)
-    if response and response.status_code == 200:
-        return True
-    else:
-        return False
-    
+    return requests.get(target_url, headers=prepped.headers).ok
+
 
 def invoke_apigateway_url(session, target_url, region):
     # TODO: Support API keys
@@ -189,11 +183,7 @@ def invoke_apigateway_url(session, target_url, region):
     sigv4.add_auth(request)
     prepped = request.prepare()
     
-    response = requests.post(target_url, headers=prepped.headers)
-    if response and response.status_code == 200:
-        return True
-    else:
-        return False
+    return requests.post(target_url, headers=prepped.headers).ok
 
 
 if __name__ == "__main__":
@@ -215,4 +205,3 @@ if __name__ == "__main__":
         exit(1)
 
     main(args)
-
