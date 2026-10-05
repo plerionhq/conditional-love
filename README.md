@@ -1,6 +1,6 @@
 # Conditional Love
 
-An AWS metadata enumeration tool by [Daniel Grzelak](https://www.linkedin.com/in/danielgrzelak/) of [Plerion](https://plerion). Use it to enumerate resource tags, account IDs, org IDs etc.
+An AWS metadata enumeration tool by [Daniel Grzelak](https://www.linkedin.com/in/danielgrzelak/) of [Plerion](https://plerion). Use it to enumerate resource tags, account IDs, org IDs, organisation management account IDs etc.
 
 Inspired by [S3 Account Search](https://github.com/WeAreCloudar/s3-account-search) by [Cloudar](https://cloudar.be/).
 
@@ -19,17 +19,19 @@ In his blog post Ben pointed out that the condition key "S3:ResourceAccount" cou
 There are now a number of global resource condition keys for use in policy evaluation. There are also many other services that allow cross-account resource sharing with identifiers that don't include account IDs. We extended Ben's work with the following findings:
 
 * Finding 1: The account ID enumeration technique with global condition "aws:ResourceAccount" can be applied to almost all other services and resources.
-* Finding 2: There are other global resource condition keys that can be similarly abused for enumeration of other metadata such as organisation IDs and resource tags.
+* Finding 2: There are other global resource condition keys that can be similarly abused for enumeration of other metadata such as organisation IDs, the organisation management (root) account ID, and resource tags.
 
 Conditional Love is a Python tool that allows the user to execute these techniques against an AWS target.
 
 A more complete discussion of the tool and technique has been published on the [Plerion Blog](https://blog.plerion.com/conditional-love-for-aws-metadata-enumeration/)
 
+Dan has since expanded on resource condition keys in two follow-up posts, which surfaced several of the keys this tool now supports: [What IAM sees that you don't](https://www.upwind.io/feed/what-iam-sees-that-you-dont) and [Let me speak to your manager account](https://www.upwind.io/feed/let-me-speak-to-your-manager-account).
+
 ## Usage
 
 ```
 usage: conditional-love.py [-h] [--profile PROFILE] --role ROLE --target TARGET 
-                           --condition {s3:ResourceAccount,aws:ResourceAccount,aws:ResourceOrgPaths,aws:ResourceOrgID,aws:ResourceTag,lambda:FunctionArn} 
+                           --condition {s3:ResourceAccount,aws:ResourceAccount,aws:ResourceOrgPaths,aws:ResourceOrgID,aws:ResourceOrgMasterAccountId,aws:ResourceArn,aws:ResourceRegion,aws:ResourceTag,lambda:FunctionArn,lambda:FunctionName,s3:BucketName,s3:Objectpath,sqs:QueueName} 
                            --action {s3:HeadObject,dataexchange:GetDataSet,lambda:InvokeFunctionUrl,execute-api:Invoke,sts:AssumeRole,sqs:ReceiveMessage} 
                            [--alphabet ALPHABET] [--region REGION] [--tag-key TAG_KEY]
 
@@ -38,10 +40,10 @@ options:
   --profile PROFILE     AWS CLI profile to execute with
   --role ROLE           ARN of the role to assume
   --target TARGET       ARN or identifier of the target resource
-  --condition {s3:ResourceAccount,aws:ResourceAccount,aws:ResourceOrgPaths,aws:ResourceOrgID,aws:ResourceTag,lambda:FunctionArn}
-                        AWS API to call
-  --action {s3:HeadObject,dataexchange:GetDataSet,lambda:InvokeFunctionUrl,execute-api:Invoke,sts:AssumeRole,sqs:ReceiveMessage}
+  --condition {s3:ResourceAccount,aws:ResourceAccount,aws:ResourceOrgPaths,aws:ResourceOrgID,aws:ResourceOrgMasterAccountId,aws:ResourceArn,aws:ResourceRegion,aws:ResourceTag,lambda:FunctionArn,lambda:FunctionName,s3:BucketName,s3:Objectpath,sqs:QueueName}
                         Condition context key to test with
+  --action {s3:HeadObject,dataexchange:GetDataSet,lambda:InvokeFunctionUrl,execute-api:Invoke,sts:AssumeRole,sqs:ReceiveMessage}
+                        AWS API to call
   --alphabet ALPHABET   String of all characters to test
   --region REGION       AWS region to perform action in
   --tag-key TAG_KEY     Tag key when using aws:ResourceTag condition
@@ -134,6 +136,52 @@ Starting to be wrong. Please be patient...
 => dagrz@plerion.co
 => dagrz@plerion.com
 ```
+
+Identify the management (organisation root) account ID that owns a public bucket:
+```
+% ./conditional-love.py --profile=<YOUR_CLI_PROFILE> \
+                        --role=<YOUR_ROLE_ARN_TO_ASSUME> \
+                        --action=s3:HeadObject \
+                        --condition=aws:ResourceOrgMasterAccountId \
+                        --target=s3://<TARGET_BUCKET>/
+Starting to be wrong. Please be patient...
+=> 3
+=> 30
+=> 303
+=> 303?
+=> 303??
+=> 303???
+=> 303????
+=> 303?????
+=> 303??????
+=> 303??????9
+=> 303??????99
+=> 303??????998
+```
+
+### Supported conditions
+
+| Condition | What it reveals about the target | Scope |
+| --- | --- | --- |
+| `aws:ResourceAccount` / `s3:ResourceAccount` | Owning account ID | global / s3 |
+| `aws:ResourceOrgID` | Owning organisation ID | global |
+| `aws:ResourceOrgPaths` | Owning organisation unit path | global |
+| `aws:ResourceOrgMasterAccountId` | Owning organisation management (root) account ID | global |
+| `aws:ResourceArn` | Full resource ARN | global |
+| `aws:ResourceRegion` | Region the resource lives in | global |
+| `aws:ResourceTag` | Value of a resource tag (use `--tag-key`) | global |
+| `s3:BucketName` | Bucket name behind an alias or access point | s3 |
+| `s3:Objectpath` | Object key | s3 |
+| `sqs:QueueName` | Queue name | sqs |
+| `lambda:FunctionArn` | Function ARN | lambda |
+| `lambda:FunctionName` | Function name | lambda |
+
+Notes:
+
+* Global conditions work with any supported action. Service specific conditions must be paired with an action for the same service: `s3:*` conditions with `s3:HeadObject`, `sqs:QueueName` with `sqs:ReceiveMessage`, and `lambda:FunctionName` with `lambda:InvokeFunctionUrl`.
+* The default alphabet is digits, which suits the account ID keys. Pass `--alphabet` for others, and make sure it covers every character the value can contain, since the search stops at the first position where nothing matches:
+  * Regions and names: `abcdefghijklmnopqrstuvwxyz0123456789-`
+  * ARNs and object paths: `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:/._-` (matching is case sensitive, so include capitals). Keep the wildcards `*` and `?` out of the alphabet.
 
 ## Extending conditional love
 
