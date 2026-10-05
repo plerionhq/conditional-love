@@ -23,6 +23,9 @@ aws:VpcSourceIp
 aws:ResourceAccount
 aws:ResourceOrgPaths
 aws:ResourceOrgID
+aws:ResourceOrgMasterAccountId
+aws:ResourceArn
+aws:ResourceRegion
 aws:ResourceTag/tag-key
 aws:CalledVia
 aws:CalledViaFirst

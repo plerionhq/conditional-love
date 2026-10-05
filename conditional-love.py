@@ -12,9 +12,16 @@ SUPPORTED_CONDITIONS = [
     's3:ResourceAccount', 
     'aws:ResourceAccount', 
     'aws:ResourceOrgPaths', 
-    'aws:ResourceOrgID', 
+    'aws:ResourceOrgID',
+    'aws:ResourceOrgMasterAccountId',
+    'aws:ResourceArn',
+    'aws:ResourceRegion',
     'aws:ResourceTag',
-    'lambda:FunctionArn'
+    'lambda:FunctionArn',
+    'lambda:FunctionName',
+    's3:BucketName',
+    's3:Objectpath',
+    'sqs:QueueName',
 ]
 SUPPORTED_ACTIONS = [
     's3:HeadObject', 
@@ -201,9 +208,9 @@ if __name__ == "__main__":
     parser.add_argument("--profile", help="AWS CLI profile to execute with", type=str, required=False)
     parser.add_argument("--role", help="ARN of the role to assume", type=str, required=True)
     parser.add_argument("--target", help="ARN or identifier of the target resource", type=str, required=True)
-    parser.add_argument("--condition", help="AWS API to call", type=str, required=True, 
+    parser.add_argument("--condition", help="Condition context key to test with", type=str, required=True,
                         choices=SUPPORTED_CONDITIONS)
-    parser.add_argument("--action", help="Condition context key to test with", type=str, required=True, 
+    parser.add_argument("--action", help="AWS API to call", type=str, required=True, 
                         choices=SUPPORTED_ACTIONS)
     parser.add_argument("--alphabet", help="String of all characters to test", type=str, required=False, default='0123456789')
     parser.add_argument("--region", help="AWS region to perform action in", type=str, required=False)
