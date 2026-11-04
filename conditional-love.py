@@ -181,7 +181,7 @@ def invoke_lambda_url(session, target_url, region):
     sigv4.add_auth(request)
     prepped = request.prepare()
     
-    response = requests.get(target_url, headers=prepped.headers)
+    response = requests.get(target_url, headers=prepped.headers, timeout=30)
     if response and response.status_code == 200:
         return True
     else:
@@ -196,7 +196,7 @@ def invoke_apigateway_url(session, target_url, region):
     sigv4.add_auth(request)
     prepped = request.prepare()
     
-    response = requests.post(target_url, headers=prepped.headers)
+    response = requests.post(target_url, headers=prepped.headers, timeout=30)
     if response and response.status_code == 200:
         return True
     else:
